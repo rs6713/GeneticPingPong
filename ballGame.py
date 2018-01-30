@@ -1,5 +1,5 @@
 import sys, pygame
-import tensorflow as tf
+#import tensorflow as tf
 import random
 import numpy as np
 
@@ -24,9 +24,11 @@ RED =   (255,   0,   0)
 
 MUTATE_THRESH=0.1
 MUTATE_PROB=0.9
-BEST_NETWORK_SPLIT=0.75
+INITIAL_DEV=1
+BEST_NETWORK_SPLIT=0.6
 MAX_GENS=20
 SCORE_SUCCESS=3
+
 
 #Define size
 DISPLAY_SIZE=(1024, 768)
@@ -39,7 +41,7 @@ pad_def=100
 
 ball_pos=dotdict({"x" : int(DISPLAY_SIZE[0]/2), "y" : int(DISPLAY_SIZE[1]/2)})
 pad_pos= dotdict({"x" : int(DISPLAY_SIZE[0]/2), "y" : int((DISPLAY_SIZE[1]-grid_def)/2)+grid_def - thickness_def})
-speed=dotdict({"x" : 4, "y" : 4})
+speed=dotdict({"x" : 3, "y" : 5})
 
 pygame.init()
 screen= pygame.display.set_mode(DISPLAY_SIZE)
@@ -52,7 +54,7 @@ myfont = pygame.font.SysFont('Comic Sans MS', 25)
 networks=[]
 pastGens=[]
 pads=[]
-no_networks=6
+no_networks=20
 score=0
 currentGeneration=1
 
@@ -68,8 +70,9 @@ def resetNetworks():
 
     for _ in range(no_networks):
         curr=dotdict({})
-        curr.weights= tf.random_normal([6,1], mean=0, stddev=1)
-        curr.bias= tf.random_normal([1], mean=0, stddev=1)
+        #curr.weights= tf.random_normal([6,1], mean=0, stddev=1)
+        curr.weights= np.random.normal(0,INITIAL_DEV, (6)) #mean, stddev, shape
+        curr.bias= np.random.normal(0,INITIAL_DEV)
         curr.score=0
         networks.append(curr)
 
@@ -83,15 +86,6 @@ def resetNetworks():
         pads.append(curr)
 
 resetNetworks()
-sess = tf.InteractiveSession()
-print(sess.run(networks[0].weights))
-
-#sess=tf.Session()
-#game infor is ball x,y pos, pad x,y pos, ball speed l,r
-#game_info_ = tf.placeholder(tf.float32, [6, 1])  #input is one value
-#W = tf.Variable(tf.zeros([6, 1]))
-#b = tf.Variable(tf.zeros([1]))
-#y = tf.matmul(x, W) + b
 
 def resetScores():
     global networks, pads
@@ -118,41 +112,41 @@ def evolveGraphs():
         new_obj.weights= temp.weights
         new_obj.bias= temp.bias
         new_obj.score=0
-        new_networks.append(new_obj )
+        new_networks.append(new_obj)
 
     #print("new networks",len(new_networks), new_networks)
     #breed networks
     random.shuffle(new_networks)
     for n in range(0,len(new_networks), 2):
         #print(n)
-        weight1=sess.run(new_networks[n].weights)
-        weight2=sess.run(new_networks[n+1].weights)
+        weight1=new_networks[n].weights
+        weight2=new_networks[n+1].weights
         #print("Weights to be rearranged and bred: ", weight1, weight2)
-        weight1= [ x[0] for x in weight1]
-        weight2= [ x[0] for x in weight2]
+        #weight1= [ x[0] for x in weight1]
+        #weight2= [ x[0] for x in weight2]
         #print("Weights fixed to be rearranged and bred: ", weight1, weight2)
 
         mid= int(len(weight1)/2)
-        new_networks[n].weights= tf.constant(weight1[:mid]+ weight2[mid:], shape=[6,1])
-        new_networks[n+1].weights = tf.constant(weight2[:mid]+ weight1[mid:], shape=[6,1])
-        
+        new_networks[n].weights= np.concatenate((weight1[:mid], weight2[mid:]), axis=0) 
+        new_networks[n+1].weights = np.concatenate((weight2[:mid], weight1[mid:]), axis=0) 
+        #if( random.uniform(0.0,1.0) >=0.8):
+        #    new_networks[n].bias, new_networks[n+1].bias=new_networks[n+1].bias, new_networks[n].bias
     
 
-    #random mutation- 0.15 chance
+    # random mutation - 0.15 chance
     for n in range(len(new_networks)):
         weights_replace=[]
-        curr_weights=sess.run(new_networks[n].weights)
-        #print("Weights to be mutated: ", curr_weights)
+        curr_weights=new_networks[n].weights
+        #print("Weights to be mutated: " , curr_weights)
 
         for w in range(len(curr_weights)):
             if( random.uniform(0.0,1.0) >=MUTATE_PROB):
-                weights_replace.append(curr_weights[w][0]+random.uniform(-MUTATE_THRESH, MUTATE_THRESH))
+                weights_replace.append(curr_weights[w]+random.uniform(-MUTATE_THRESH, MUTATE_THRESH))
             else:
-                weights_replace.append(curr_weights[w][0])
-        new_networks[n].weights= tf.constant(weights_replace,shape=[6,1] )
+                weights_replace.append(curr_weights[w])
+        new_networks[n].weights= weights_replace
         if( random.uniform(0.0,1.0) >=MUTATE_PROB):
-            new_networks[n].bias= tf.add( new_networks[n].bias, tf.constant(random.uniform(-MUTATE_THRESH, MUTATE_THRESH)))     
-
+            new_networks[n].bias= new_networks[n].bias + random.uniform(-MUTATE_THRESH, MUTATE_THRESH)    
 
     networks=new_networks
 
@@ -186,32 +180,37 @@ while(1):
     textsurface = myfont.render('Generation: '+ str(currentGeneration), True, WHITE)
     screen.blit(textsurface,(50,50))
 
-    textsurface2 = myfont.render('Score '+ str(score), True, WHITE)
-    screen.blit(textsurface2,(500,50))
+    textsurface2 = myfont.render('Score '+ str(score) + "/"+ str(SCORE_SUCCESS), True, WHITE)
+    screen.blit(textsurface2,(480,50))
 
     textsurface3 = myfont.render('Successful Gen', True, WHITE)
-    screen.blit(textsurface3,(830,50)) 
-    for i, gen in enumerate(pastGens):
+    screen.blit(textsurface3,(830,50))
+
+    pastResults= pastGens if len(pastGens)<=10 else pastGens[len(pastGens)-10:]
+    for i, gen in enumerate(pastResults):
         textsurface3 = myfont.render('Test '+ str(i)+ ": "+ str(gen), True, WHITE)
         screen.blit(textsurface3,(830,50+(i+1)*40)) 
 
     drawn_pads={}
     for i in range(len(pads)):
         p=pads[i]
+        
         if(not p.dead):
-            if p.x<= DISPLAY_SIZE[0] and p.x>=0:
+            if p.x< (DISPLAY_SIZE[0]-pad_def) and p.x>=0:
                 pad=pygame.draw.rect(screen, p.color, [p.x,p.y,pad_def,thickness_def])
                 drawn_pads[i]=pad
-            elif p.x>=DISPLAY_SIZE[0]:
+            #Off right of screen
+            elif p.x>= (DISPLAY_SIZE[0]-pad_def):
                 pad=pygame.draw.rect(screen, p.color, [DISPLAY_SIZE[0]-pad_def,p.y,pad_def,thickness_def])
                 drawn_pads[i]=pad
+            #Off left of screen
             else:
                 pad=pygame.draw.rect(screen, p.color, [0,p.y,pad_def,thickness_def])
                 drawn_pads[i]=pad
 
     pygame.display.flip()
 
-    if(count==4):
+    if(count==3):
         count=0
         if(ball.colliderect(grid.top)):
             speed.y=-speed.y
@@ -222,10 +221,13 @@ while(1):
 
         for n in range(len(networks)):
             if not pads[n].dead:
-                input_arr=[[ball_pos.x, ball_pos.y, pads[n].x, pads[n].y, speed.x, speed.y]]
-                move= tf.matmul(tf.convert_to_tensor(input_arr, dtype=tf.float32) , networks[n].weights)+ networks[n].bias
-                move=sess.run(move)
-                pads[n].x+=move[0][0]
+                input_arr=[ball_pos.x, ball_pos.y, pads[n].x, pads[n].y, speed.x, speed.y]
+                #print("input arr ",np.array(input_arr))
+                #print(networks[n].weights, np.reshape(np.array(input_arr),(1,6)))
+                #print(np.sum(np.multiply(networks[n].weights, np.reshape(np.array(input_arr), (1,6) ) ) ))
+                #print(networks[n].bias)
+                move= np.sum(np.multiply(networks[n].weights, np.reshape(np.array(input_arr), (1,6) ) )) + networks[n].bias
+                pads[n].x+=move
 
         if(ball.colliderect(grid.pad_zone)):
             print("Should be hitting paddle")
@@ -238,7 +240,7 @@ while(1):
                         score+=1
                 else:
                     pads[d].dead=1
-                    networks[d].score-=abs(pads[d].x-ball_pos.x)/(grid_def-(thickness_def*2))
+                    networks[d].score-=abs(pads[d].x-ball_pos.x)/(grid_def)
             print("Number of pads still active:",  sum([not p.dead for p in pads]) )
 
         if(not any([not p.dead for p in pads])):
@@ -249,6 +251,9 @@ while(1):
                 resetScores()
                 currentGeneration+=1
                 score=0
+            else:
+                pastGens.append("Failed")
+                resetNetworks()
         
         if(score>=SCORE_SUCCESS):
             pastGens.append(currentGeneration)
