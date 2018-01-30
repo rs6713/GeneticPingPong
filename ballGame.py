@@ -1,6 +1,7 @@
 import sys, pygame
 import tensorflow as tf
 import random
+import numpy as np
 
 from copy import deepcopy
 
@@ -25,6 +26,7 @@ MUTATE_THRESH=0.1
 MUTATE_PROB=0.9
 BEST_NETWORK_SPLIT=0.75
 MAX_GENS=20
+SCORE_SUCCESS=3
 
 #Define size
 DISPLAY_SIZE=(1024, 768)
@@ -33,7 +35,7 @@ grid_def=600
 pad_def=100
 
 
-currentGeneration=1
+
 
 ball_pos=dotdict({"x" : int(DISPLAY_SIZE[0]/2), "y" : int(DISPLAY_SIZE[1]/2)})
 pad_pos= dotdict({"x" : int(DISPLAY_SIZE[0]/2), "y" : int((DISPLAY_SIZE[1]-grid_def)/2)+grid_def - thickness_def})
@@ -48,28 +50,42 @@ myfont = pygame.font.SysFont('Comic Sans MS', 25)
 
 
 networks=[]
+pastGens=[]
 pads=[]
-no_networks=4
+no_networks=6
 score=0
+currentGeneration=1
 
-for _ in range(no_networks):
-    curr=dotdict({})
-    curr.weights= tf.random_normal([6,1], mean=0, stddev=1)
-    curr.bias= tf.random_normal([1], mean=0, stddev=1)
-    curr.score=0
-    networks.append(curr)
+def resetNetworks():
+    global no_networks, networks, pads, currentGeneration, score
+    networks=[]
+    pads=[]
+    score=0
+    
+    currentGeneration=1
+    ball_pos.x=int(DISPLAY_SIZE[0]/2)
+    ball_pos.y=int(DISPLAY_SIZE[1]/2)
+
+    for _ in range(no_networks):
+        curr=dotdict({})
+        curr.weights= tf.random_normal([6,1], mean=0, stddev=1)
+        curr.bias= tf.random_normal([1], mean=0, stddev=1)
+        curr.score=0
+        networks.append(curr)
 
 
-for _ in range(no_networks):
-    curr=dotdict({})
-    curr.color= (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255) ) 
-    curr.x=int(DISPLAY_SIZE[0]/2)
-    curr.y=int((DISPLAY_SIZE[1]-grid_def)/2)+grid_def - thickness_def
-    curr.dead=0
-    pads.append(curr)
+    for _ in range(no_networks):
+        curr=dotdict({})
+        curr.color= (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255) ) 
+        curr.x=int(DISPLAY_SIZE[0]/2)
+        curr.y=int((DISPLAY_SIZE[1]-grid_def)/2)+grid_def - thickness_def
+        curr.dead=0
+        pads.append(curr)
 
+resetNetworks()
 sess = tf.InteractiveSession()
 print(sess.run(networks[0].weights))
+
 #sess=tf.Session()
 #game infor is ball x,y pos, pad x,y pos, ball speed l,r
 #game_info_ = tf.placeholder(tf.float32, [6, 1])  #input is one value
@@ -173,10 +189,16 @@ while(1):
     textsurface2 = myfont.render('Score '+ str(score), True, WHITE)
     screen.blit(textsurface2,(500,50))
 
+    textsurface3 = myfont.render('Successful Gen', True, WHITE)
+    screen.blit(textsurface3,(830,50)) 
+    for i, gen in enumerate(pastGens):
+        textsurface3 = myfont.render('Test '+ str(i)+ ": "+ str(gen), True, WHITE)
+        screen.blit(textsurface3,(830,50+(i+1)*40)) 
+
     drawn_pads={}
     for i in range(len(pads)):
         p=pads[i]
-        if(not p.dead ):
+        if(not p.dead):
             if p.x<= DISPLAY_SIZE[0] and p.x>=0:
                 pad=pygame.draw.rect(screen, p.color, [p.x,p.y,pad_def,thickness_def])
                 drawn_pads[i]=pad
@@ -226,6 +248,13 @@ while(1):
                 evolveGraphs()
                 resetScores()
                 currentGeneration+=1
+                score=0
+        
+        if(score>=SCORE_SUCCESS):
+            pastGens.append(currentGeneration)
+            resetNetworks()
+
+            
 
     count+=1
     ball_pos.x+=speed.x
