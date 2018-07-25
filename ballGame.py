@@ -54,7 +54,7 @@ myfont = pygame.font.SysFont('Comic Sans MS', 25)
 networks=[]
 pastGens=[]
 pads=[]
-no_networks=20
+no_networks=50
 score=0
 currentGeneration=1
 
@@ -71,7 +71,7 @@ def resetNetworks():
     for _ in range(no_networks):
         curr=dotdict({})
         #curr.weights= tf.random_normal([6,1], mean=0, stddev=1)
-        curr.weights= np.random.normal(0,INITIAL_DEV, (6)) #mean, stddev, shape
+        curr.weights= np.random.normal(0,INITIAL_DEV, (4)) #mean, stddev, shape
         curr.bias= np.random.normal(0,INITIAL_DEV)
         curr.score=0
         networks.append(curr)
@@ -221,13 +221,13 @@ while(1):
 
         for n in range(len(networks)):
             if not pads[n].dead:
-                input_arr=[ball_pos.x, ball_pos.y, pads[n].x, pads[n].y, speed.x, speed.y]
+                input_arr=[ball_pos.x, ball_pos.y,  speed.x, speed.y]
                 #print("input arr ",np.array(input_arr))
                 #print(networks[n].weights, np.reshape(np.array(input_arr),(1,6)))
                 #print(np.sum(np.multiply(networks[n].weights, np.reshape(np.array(input_arr), (1,6) ) ) ))
                 #print(networks[n].bias)
-                move= np.sum(np.multiply(networks[n].weights, np.reshape(np.array(input_arr), (1,6) ) )) + networks[n].bias
-                pads[n].x+=move
+                move= np.sum(np.multiply(networks[n].weights, np.reshape(np.array(input_arr), (1,4) ) )) + networks[n].bias
+                pads[n].x=move
 
         if(ball.colliderect(grid.pad_zone)):
             print("Should be hitting paddle")
